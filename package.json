@@ -1,0 +1,42 @@
+{
+  "name": "mistral-simple-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Mistral text completion and JSON-Schema structured output.",
+  "license": "MIT",
+  "author": "Maxime Bertheau",
+  "private": true,
+  "type": "module",
+  "module": "src/index.ts",
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --fix",
+    "lint:check": "eslint src --max-warnings 0",
+    "format": "prettier --write src",
+    "build": "bun build src/index.ts --target=bun --outdir dist"
+  },
+  "dependencies": {
+    "@mistralai/mistralai": "^2.6.1",
+    "@modelcontextprotocol/hono": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@opentelemetry/api": "^1.9.1",
+    "hono": "^4.13.1",
+    "outdent": "^0.8.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "@types/bun": "latest",
+    "eslint": "^10.8.1",
+    "eslint-import-resolver-typescript": "^4.4.5",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-unicorn": "^73.0.0",
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "prettier": "^3.9.6",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.67.0"
+  }
+}

@@ -1,0 +1,9 @@
+services:
+  mistral-simple-mcp:
+    image: ghcr.io/maxbth/mistral-simple-mcp:latest
+    ports:
+      - '3000:3000'
+    environment:
+      MISTRAL_API_KEY: your-api-key-here
+      MCP_AUTH_TOKEN: generate-a-long-random-string
+    restart: unless-stopped
