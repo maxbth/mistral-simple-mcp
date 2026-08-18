@@ -1,10 +1,13 @@
 name: CI
 
+# On main and release tags, this workflow runs as a job inside Docker Publish
+# (via workflow_call), which gates image publishing on the tests passing.
 on:
   push:
-    branches:
-      - '**'
+    branches-ignore:
+      - main
   pull_request:
+  workflow_call:
 
 jobs:
   test:
