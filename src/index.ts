@@ -14,6 +14,7 @@ async function main(): Promise<void> {
 
   const deps = {
     client: new MistralClient(config.mistral),
+    audio: config.audio,
   };
 
   if (config.mcp.transport === 'stdio') {

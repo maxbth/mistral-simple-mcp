@@ -8,7 +8,9 @@ function config(overrides: Partial<Config['mcp']> = {}): Config {
     mistral: {
       apiKey: 'sk-test-key',
       model: 'mistral-medium-latest',
+      transcriptionModel: 'voxtral-mini-latest',
       timeoutMs: 60_000,
+      transcribeTimeoutMs: 300_000,
     },
     mcp: {
       transport: 'http',
@@ -17,6 +19,10 @@ function config(overrides: Partial<Config['mcp']> = {}): Config {
       path: '/mcp',
       allowedOrigins: [],
       ...overrides,
+    },
+    audio: {
+      roots: [],
+      maxBytes: 104_857_600,
     },
   };
 }

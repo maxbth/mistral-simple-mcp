@@ -10,7 +10,9 @@ type SeenRequest = Record<string, unknown>;
 const config: MistralConfig = {
   apiKey: 'sk-test-key',
   model: 'mistral-medium-latest',
+  transcriptionModel: 'voxtral-mini-latest',
   timeoutMs: 60_000,
+  transcribeTimeoutMs: 300_000,
 };
 
 function clientWith(complete: (request: unknown) => Promise<unknown>, configOverrides: Partial<MistralConfig> = {}): MistralClient {
@@ -427,4 +429,262 @@ test('strips credentials from the base URL of a real refused connection', async 
     expect(message).not.toContain('sk-secret-value');
     expect(message).not.toContain('gateway:');
   }
+});
+
+/**
+ * Stubs `mistral.audio.transcriptions.complete` the same way `clientWith` stubs chat.
+ *
+ * The stub captures the options object too, because the per-call timeout and retry override is
+ * the part of `transcribe()` that is easy to drop in a refactor and impossible to see from the
+ * result.
+ */
+function transcribingClient(
+  complete: (request: unknown, options: unknown) => Promise<unknown>,
+  configOverrides: Partial<MistralConfig> = {},
+): MistralClient {
+  const client = new MistralClient({
+    ...config,
+    ...configOverrides,
+  });
+  (client as unknown as {mistral: {audio: {transcriptions: {complete: unknown}}}}).mistral = {audio: {transcriptions: {complete}}};
+  return client;
+}
+
+const transcriptionResponse = {
+  model: 'voxtral-mini-latest',
+  text: 'hello there',
+  language: 'en',
+  segments: [
+    {
+      type: 'transcription_segment',
+      text: 'hello there',
+      start: 0,
+      end: 1.5,
+      speakerId: 'speaker_0',
+    },
+  ],
+  usage: {
+    promptTokens: 1,
+    completionTokens: 2,
+    totalTokens: 3,
+    promptAudioSeconds: 7,
+  },
+};
+
+test('transcribe sends a file url and returns the flattened result', async () => {
+  let seen: SeenRequest | undefined;
+  const client = transcribingClient(async (request) => {
+    seen = request as SeenRequest;
+    return transcriptionResponse;
+  });
+
+  const result = await client.transcribe({
+    audio: {
+      kind: 'url',
+      url: 'https://example.com/a.mp3',
+    },
+  });
+
+  expect(seen?.fileUrl).toBe('https://example.com/a.mp3');
+  expect(seen).not.toHaveProperty('file');
+  expect(result.text).toBe('hello there');
+  expect(result.language).toBe('en');
+  expect(result.segments).toEqual([
+    {
+      text: 'hello there',
+      start: 0,
+      end: 1.5,
+      speakerId: 'speaker_0',
+    },
+  ]);
+  expect(result.usage.audioSeconds).toBe(7);
+});
+
+test('transcribe sends a file part and no url when given bytes', async () => {
+  let seen: SeenRequest | undefined;
+  const client = transcribingClient(async (request) => {
+    seen = request as SeenRequest;
+    return transcriptionResponse;
+  });
+
+  await client.transcribe({
+    audio: {
+      kind: 'file',
+      fileName: 'memo.wav',
+      content: new Uint8Array([1, 2, 3]),
+    },
+  });
+
+  expect(seen).not.toHaveProperty('fileUrl');
+  expect(seen?.file).toEqual({
+    fileName: 'memo.wav',
+    content: new Uint8Array([1, 2, 3]),
+  });
+});
+
+test('transcribe falls back to the configured transcription model', async () => {
+  let seen: SeenRequest | undefined;
+  const client = transcribingClient(async (request) => {
+    seen = request as SeenRequest;
+    return transcriptionResponse;
+  });
+
+  await client.transcribe({
+    audio: {
+      kind: 'url',
+      url: 'https://example.com/a.mp3',
+    },
+  });
+  expect(seen?.model).toBe('voxtral-mini-latest');
+});
+
+test('transcribe omits optional fields it was not given, rather than sending undefined', async () => {
+  let seen: SeenRequest | undefined;
+  const client = transcribingClient(async (request) => {
+    seen = request as SeenRequest;
+    return transcriptionResponse;
+  });
+
+  await client.transcribe({
+    audio: {
+      kind: 'url',
+      url: 'https://example.com/a.mp3',
+    },
+  });
+
+  for (const key of ['language', 'temperature', 'diarize', 'contextBias', 'timestampGranularities']) {
+    expect(seen).not.toHaveProperty(key);
+  }
+});
+
+test('transcribe forwards a falsy temperature and a false diarize', async () => {
+  let seen: SeenRequest | undefined;
+  const client = transcribingClient(async (request) => {
+    seen = request as SeenRequest;
+    return transcriptionResponse;
+  });
+
+  await client.transcribe({
+    audio: {
+      kind: 'url',
+      url: 'https://example.com/a.mp3',
+    },
+    temperature: 0,
+    diarize: false,
+  });
+
+  expect(seen?.temperature).toBe(0);
+  expect(seen?.diarize).toBe(false);
+});
+
+test('transcribe overrides the deadline and the retry budget together', async () => {
+  let seen: Record<string, unknown> | undefined;
+  const client = transcribingClient(
+    async (_request, options) => {
+      seen = options as Record<string, unknown>;
+      return transcriptionResponse;
+    },
+    {transcribeTimeoutMs: 120_000},
+  );
+
+  await client.transcribe({
+    audio: {
+      kind: 'url',
+      url: 'https://example.com/a.mp3',
+    },
+  });
+
+  expect(seen?.timeoutMs).toBe(120_000);
+  // Strictly under the deadline, or the SDK's abort wins the race and every retryable status
+  // comes back as a timeout — see `retryShapeFor`.
+  const retries = seen?.retries as {backoff: {maxElapsedTime: number}};
+  expect(retries.backoff.maxElapsedTime).toBeLessThan(120_000);
+  expect(retries.backoff.maxElapsedTime).toBe(96_000);
+});
+
+test('transcribe normalises a null language and null audio seconds to absent', async () => {
+  const client = transcribingClient(async () => ({
+    ...transcriptionResponse,
+    language: null,
+    segments: undefined,
+    usage: {
+      promptTokens: 1,
+      completionTokens: 2,
+      totalTokens: 3,
+      promptAudioSeconds: null,
+    },
+  }));
+
+  const result = await client.transcribe({
+    audio: {
+      kind: 'url',
+      url: 'https://example.com/a.mp3',
+    },
+  });
+
+  expect(result).not.toHaveProperty('language');
+  expect(result).not.toHaveProperty('segments');
+  expect(result.usage).not.toHaveProperty('audioSeconds');
+});
+
+test('transcribe drops a null speaker id from a segment', async () => {
+  const client = transcribingClient(async () => ({
+    ...transcriptionResponse,
+    segments: [
+      {
+        text: 'hi',
+        start: 0,
+        end: 1,
+        speakerId: null,
+      },
+    ],
+  }));
+
+  const result = await client.transcribe({
+    audio: {
+      kind: 'url',
+      url: 'https://example.com/a.mp3',
+    },
+  });
+
+  expect(result.segments).toEqual([
+    {
+      text: 'hi',
+      start: 0,
+      end: 1,
+    },
+  ]);
+});
+
+test('transcribe maps an SDK error and names its own timeout setting', async () => {
+  const rejecting = transcribingClient(async () => {
+    throw sdkHttpError(429);
+  });
+  const rateLimited = await rejecting
+    .transcribe({
+      audio: {
+        kind: 'url',
+        url: 'https://example.com/a.mp3',
+      },
+    })
+    .catch((error: unknown) => error);
+  expect(rateLimited).toBeInstanceOf(MistralError);
+  expect((rateLimited as MistralError).status).toBe(429);
+
+  const timingOut = transcribingClient(
+    async () => {
+      throw new sdkErrors.RequestTimeoutError('timed out');
+    },
+    {transcribeTimeoutMs: 90_000},
+  );
+  const timedOut = await timingOut
+    .transcribe({
+      audio: {
+        kind: 'url',
+        url: 'https://example.com/a.mp3',
+      },
+    })
+    .catch((error: unknown) => error);
+  expect((timedOut as MistralError).message).toContain('90000ms');
+  expect((timedOut as MistralError).message).toContain('MISTRAL_TRANSCRIBE_TIMEOUT_MS');
 });

@@ -31,3 +31,18 @@ export class SchemaError extends PublicError {
     this.name = 'SchemaError';
   }
 }
+
+/**
+ * The caller named an audio file this server will not read.
+ *
+ * Distinct from `SchemaError` because the fix is different in kind: a schema problem is corrected
+ * by rewriting an argument, whereas an out-of-bounds path is corrected by naming a different file
+ * — or, if the operator meant to permit it, by widening `MISTRAL_AUDIO_ROOTS`. The message says
+ * which of the two it is, because the model cannot do anything about the second on its own.
+ */
+export class AudioError extends PublicError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AudioError';
+  }
+}

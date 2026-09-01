@@ -10,7 +10,7 @@ function deps(complete: () => Promise<unknown>) {
 test('registers every tool in TOOLS', () => {
   const server = createServer(deps(async () => ({})));
   expect(server).toBeDefined();
-  expect(TOOLS.map((tool) => tool.name).sort()).toEqual(['mistral_complete', 'mistral_extract']);
+  expect(TOOLS.map((tool) => tool.name).sort()).toEqual(['mistral_complete', 'mistral_extract', 'mistral_transcribe']);
 });
 
 test('every tool has a non-empty title and description', () => {

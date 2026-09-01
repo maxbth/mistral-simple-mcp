@@ -2,22 +2,24 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE.md)
 
-A [Model Context Protocol](https://modelcontextprotocol.io) server that gives an agent two tools
-backed by [Mistral](https://mistral.ai): single-shot text completion, and structured data
-extraction validated against a JSON Schema you supply.
+A [Model Context Protocol](https://modelcontextprotocol.io) server that gives an agent three tools
+backed by [Mistral](https://mistral.ai): single-shot text completion, structured data extraction
+validated against a JSON Schema you supply, and offline audio transcription with Voxtral.
 
 An independent project, not affiliated with or endorsed by Mistral AI.
 
 ## What this is
 
-Two tools, served over Streamable HTTP and stdio:
+Three tools, served over Streamable HTTP and stdio:
 
 - **`mistral_complete`** — single-shot text completion: summarize, rewrite, classify, draft.
 - **`mistral_extract`** — structured data extraction against a JSON Schema you supply, with the
   response validated before it comes back.
+- **`mistral_transcribe`** — offline transcription of a complete audio recording with Voxtral,
+  optionally with timestamps and speaker labels.
 
-Streamable HTTP is served at `POST /mcp`; stdio is selected with the `--stdio` flag. Both tools
-call a paid, non-deterministic API, so neither is annotated as read-only or idempotent.
+Streamable HTTP is served at `POST /mcp`; stdio is selected with the `--stdio` flag. All three
+tools call a paid, non-deterministic API, so none is annotated as read-only or idempotent.
 
 ## Quick start
 
@@ -100,6 +102,14 @@ another tool — `mistral_extract` is the better fit. Supply a JSON Schema descr
 need; the response is validated against that same schema before it's returned, so a successful
 call is guaranteed to match, and a mismatch comes back as a clear, retryable error instead of
 downstream code tripping over the wrong shape.
+
+**Turning a recording into text an agent can work on.** `mistral_transcribe` takes a complete
+audio file — a meeting, an interview, a voice memo, a podcast episode — and returns the
+transcript, optionally with per-segment timestamps and speaker labels. Offline here means the
+whole file is submitted and one finished transcript comes back, which is the shape an MCP tool
+call has; live, streaming transcription is a different endpoint and is not exposed. Feed the
+result to `mistral_complete` to summarize it, or to `mistral_extract` to pull structured facts
+(decisions, action items, dates) out of it.
 
 ## Tool reference
 
@@ -200,6 +210,109 @@ properties are returned absent, not null.
 
 See [Structured output](#structured-output) below for what `schema` can and can't express.
 
+### `mistral_transcribe`
+
+Transcribe a complete audio recording to text with Mistral's Voxtral model. Offline in the sense
+that the whole file is submitted and one finished transcript comes back — this is for recordings
+that already exist (a meeting, a voice memo, a podcast), not for live audio. Name the audio with
+`fileUrl`, or with `filePath` if the operator has enabled local paths. Ask for
+`timestampGranularities` when you need to know when something was said, and `diarize` when you
+need to know who said it.
+
+Exactly one of `filePath` and `fileUrl` is required — supplying both, or neither, is rejected
+before anything is read or paid for.
+
+| Parameter | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `filePath` | string | one of the two | — | Absolute path to an audio file on the machine running this server. Only paths inside the operator-configured `MISTRAL_AUDIO_ROOTS` are readable, and the setting is empty by default, so use `fileUrl` unless you know local paths are enabled here. |
+| `fileUrl` | string (URL) | one of the two | — | URL of an audio file. Mistral fetches it directly, so it has to be reachable from Mistral's network — a presigned object-storage link works, a link behind your own VPN does not. |
+| `language` | string, 2–16 chars | no | auto-detected | ISO 639-1 code of the spoken language, e.g. `en` or `fr`. Detected automatically when omitted; setting it boosts accuracy. |
+| `model` | `voxtral-mini-latest` | no | server-configured model (`MISTRAL_TRANSCRIPTION_MODEL`) | Model to use. Defaults to the server-configured transcription model. |
+| `temperature` | number, 0–2 | no | Mistral's own default | Sampling temperature. Transcription usually wants 0. |
+| `diarize` | boolean | no | `false` | Label each segment with a speaker id. Implies segment timestamps in the response. |
+| `contextBias` | array of strings, max 100 | no | none | Up to 100 proper nouns, product names or technical terms that appear in the audio, to steer the model toward spelling them correctly. |
+| `timestampGranularities` | array of `segment` \| `word` | no | none | Ask for timestamped segments in the response: `segment` for per-utterance spans, `word` for per-word. |
+
+**Example call**
+
+```json
+{
+  "fileUrl": "https://docs.mistral.ai/audio/bcn_weather.mp3",
+  "language": "en",
+  "diarize": true,
+  "timestampGranularities": ["segment"],
+  "contextBias": ["Barcelona", "Montjuïc"]
+}
+```
+
+**Example response**
+
+```json
+{
+  "text": "Good morning Barcelona. Expect clear skies today, with a high of 24 degrees.",
+  "model": "voxtral-mini-latest",
+  "language": "en",
+  "segments": [
+    {
+      "text": "Good morning Barcelona.",
+      "start": 0,
+      "end": 1.8,
+      "speakerId": "speaker_0"
+    },
+    {
+      "text": "Expect clear skies today, with a high of 24 degrees.",
+      "start": 1.8,
+      "end": 5.2,
+      "speakerId": "speaker_0"
+    }
+  ],
+  "usage": {
+    "promptTokens": 0,
+    "completionTokens": 21,
+    "totalTokens": 21,
+    "audioSeconds": 5
+  }
+}
+```
+
+`segments` is present only when `timestampGranularities` or `diarize` asked for it, `speakerId`
+only when `diarize` was set, and `language` and `audioSeconds` only when Mistral reported them —
+absent rather than `null` in every case.
+
+See [Transcribing local files](#transcribing-local-files) below for what `filePath` requires.
+
+## Transcribing local files
+
+`filePath` reads off the disk of the machine running the server, and it is **disabled until an
+operator opts in** by listing directories in `MISTRAL_AUDIO_ROOTS`:
+
+```bash
+MISTRAL_AUDIO_ROOTS=/srv/recordings,/home/me/Voice Memos
+```
+
+Entries are absolute paths, comma-separated. A relative entry is a startup error, because it would
+resolve against whatever working directory the server happened to be launched from — which on
+stdio is the client's, not yours.
+
+The default is empty rather than open because the same build serves both transports. Over stdio the
+client is an agent that already has your own filesystem access, so reading a local file crosses no
+boundary. Over HTTP the client is remote, and an unrestricted `filePath` would be an
+arbitrary-file-read primitive for anything that can reach the port. One rule for both transports is
+auditable; two is a question, so local paths are off until you name the directories you meant.
+
+Within a root, a path is accepted only if it **resolves** inside it: `..` segments and symlinks are
+both followed first, so a symlink planted in a readable directory cannot point at `/etc/shadow`.
+The check is a containment test rather than a prefix test, so a root of `/srv/audio` does not admit
+`/srv/audio-private`. Anything refused is refused before the paid request, and the error names
+which of the two problems it was — the wrong file, or a root that needs widening.
+
+`MISTRAL_AUDIO_MAX_BYTES` (100 MiB by default) caps one file. It is this server's own guard
+against reading a huge file into memory, not Mistral's limit; the size is read from `stat`, so an
+oversized file is refused without being read at all.
+
+Nothing checks the file's extension against a list of audio formats: Mistral decides what it can
+decode, and a format it cannot comes back as a clear API error rather than a stale allow-list here.
+
 ## Structured output
 
 `mistral_extract`'s `schema` argument is sent to Mistral **verbatim** — it is never normalized or
@@ -247,7 +360,11 @@ not set `additionalProperties: false` does not forbid extras.
 |---|---|---|
 | `MISTRAL_API_KEY` | — | **required** |
 | `MISTRAL_DEFAULT_MODEL` | `mistral-medium-latest` | `mistral-small-latest`, `mistral-medium-latest`, or `mistral-large-latest` |
-| `MISTRAL_TIMEOUT_MS` | `60000` | per-request timeout; also bounds retry backoff (see below) |
+| `MISTRAL_TIMEOUT_MS` | `60000` | per-request timeout for completion and extraction; also bounds retry backoff (see below) |
+| `MISTRAL_TRANSCRIPTION_MODEL` | `voxtral-mini-latest` | the model `mistral_transcribe` defaults to |
+| `MISTRAL_TRANSCRIBE_TIMEOUT_MS` | `300000` | per-request timeout for transcription; separate because audio is processed by duration |
+| `MISTRAL_AUDIO_ROOTS` | empty | comma-separated **absolute** directories `mistral_transcribe` may read; empty disables `filePath` entirely |
+| `MISTRAL_AUDIO_MAX_BYTES` | `104857600` | 100 MiB cap on one local audio file |
 | `MISTRAL_BASE_URL` | unset | self-hosted or proxied endpoints; must be a valid URL |
 | `MCP_TRANSPORT` | `http` | `http` or `stdio`; the `--stdio` CLI flag overrides this |
 | `MCP_HOST` | `127.0.0.1` | the image sets `0.0.0.0` |
@@ -258,11 +375,13 @@ not set `additionalProperties: false` does not forbid extras.
 
 There is deliberately no retry-count setting. The Mistral SDK has no attempt-count option — its
 retry behavior is a backoff shape (initial interval, max interval, exponent), not a fixed number
-of tries — so the knob this server exposes is `MISTRAL_TIMEOUT_MS`, which bounds how long that
-backoff sequence is allowed to run rather than how many times it runs. The retry budget is set to
-80% of it, deliberately less than the whole: the SDK only reports the upstream response once its
-retry budget is spent, so a budget equal to the deadline means a rate limit comes back as a
-timeout instead of as a rate limit.
+of tries — so the knobs this server exposes are `MISTRAL_TIMEOUT_MS` and
+`MISTRAL_TRANSCRIBE_TIMEOUT_MS`, which bound how long that backoff sequence is allowed to run
+rather than how many times it runs. Each request's retry budget is set to 80% of its own deadline,
+deliberately less than the whole: the SDK only reports the upstream response once its retry budget
+is spent, so a budget equal to the deadline means a rate limit comes back as a timeout instead of
+as a rate limit. Transcription carries its own deadline because a recording is processed by its
+duration rather than by prompt size, and a long one routinely runs past a completion timeout.
 
 ## Docker
 
@@ -314,6 +433,10 @@ to reach it without a token to run their health probe.
 that make compilation cost wildly more than the schema's size suggests: `$ref` in any form, and an
 array-valued `type` on a node that has subschemas under it. The practical cost is that **recursive
 schemas are not supported**.
+
+`mistral_transcribe` is offline-only — the realtime streaming endpoint is not exposed — and reads
+local files only from the directories an operator lists in `MISTRAL_AUDIO_ROOTS`, which is empty
+by default.
 
 See [docs/known-limitations.md](docs/known-limitations.md) for the full list, including the three
 known unbounded-work classes and what defends against them.

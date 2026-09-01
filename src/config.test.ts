@@ -152,3 +152,85 @@ test('rejects a base url that is not a url', () => {
     ),
   ).toThrow(ConfigError);
 });
+
+test('defaults the transcription model, its timeout, and the audio limits', () => {
+  const config = loadConfig(base, []);
+  expect(config.mistral.transcriptionModel).toBe('voxtral-mini-latest');
+  expect(config.mistral.transcribeTimeoutMs).toBe(300_000);
+  expect(config.audio.roots).toEqual([]);
+  expect(config.audio.maxBytes).toBe(104_857_600);
+});
+
+test('parses MISTRAL_AUDIO_ROOTS as a trimmed, comma-separated list', () => {
+  expect(
+    loadConfig(
+      {
+        ...base,
+        MISTRAL_AUDIO_ROOTS: '/srv/audio, /var/recordings ,',
+      },
+      [],
+    ).audio.roots,
+  ).toEqual(['/srv/audio', '/var/recordings']);
+});
+
+test('rejects a relative entry in MISTRAL_AUDIO_ROOTS', () => {
+  expect(() =>
+    loadConfig(
+      {
+        ...base,
+        MISTRAL_AUDIO_ROOTS: '/srv/audio,recordings',
+      },
+      [],
+    ),
+  ).toThrow(ConfigError);
+});
+
+test('rejects a transcription model outside the enum', () => {
+  expect(() =>
+    loadConfig(
+      {
+        ...base,
+        MISTRAL_TRANSCRIPTION_MODEL: 'whisper-1',
+      },
+      [],
+    ),
+  ).toThrow(ConfigError);
+});
+
+test('rejects a non-positive MISTRAL_TRANSCRIBE_TIMEOUT_MS and MISTRAL_AUDIO_MAX_BYTES', () => {
+  expect(() =>
+    loadConfig(
+      {
+        ...base,
+        MISTRAL_TRANSCRIBE_TIMEOUT_MS: '0',
+      },
+      [],
+    ),
+  ).toThrow(ConfigError);
+  expect(() =>
+    loadConfig(
+      {
+        ...base,
+        MISTRAL_AUDIO_MAX_BYTES: '-1',
+      },
+      [],
+    ),
+  ).toThrow(ConfigError);
+});
+
+test('names the failing key without echoing the offending audio root', () => {
+  try {
+    loadConfig(
+      {
+        ...base,
+        MISTRAL_AUDIO_ROOTS: 'relative/secret-project',
+      },
+      [],
+    );
+    throw new Error('expected loadConfig to throw');
+  } catch (error) {
+    expect(error).toBeInstanceOf(ConfigError);
+    expect((error as ConfigError).message).toContain('MISTRAL_AUDIO_ROOTS');
+    expect((error as ConfigError).message).not.toContain('secret-project');
+  }
+});
