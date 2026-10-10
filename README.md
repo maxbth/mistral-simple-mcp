@@ -118,7 +118,7 @@ match a specific JSON shape, use `mistral_extract` instead.
 |---|---|---|---|---|
 | `prompt` | string | yes | — | The instruction and any input text it operates on. |
 | `system` | string | no | none | System prompt setting the role, tone or output rules. |
-| `model` | `mistral-small-latest` \| `mistral-medium-latest` \| `mistral-large-latest` | no | server-configured model (`MISTRAL_DEFAULT_MODEL`) | Model to use. Defaults to the server-configured model. |
+| `model` | `mistral-small-latest` \| `mistral-medium-latest` \| `mistral-large-latest` \| `mistral-large-4-0` (Le Chonk) | no | server-configured model (`MISTRAL_DEFAULT_MODEL`) | Model to use. Defaults to the server-configured model. |
 | `temperature` | number, 0–2 | no | Mistral's own default | Sampling temperature. Lower is more deterministic. Mistral recommends 0.0-0.7. |
 | `maxTokens` | integer > 0 | no | Mistral's own default | Maximum tokens to generate. |
 
@@ -160,7 +160,7 @@ properties are returned absent, not null.
 | `schema` | object (JSON Schema) | yes | — | JSON Schema describing the object to return. Standard JSON Schema: an object with `type`, `properties` and `required`, nested as deeply as you need. Two things are rejected before any model call, both because they make a small schema extremely expensive to compile: `$ref` in any form — inline the definition instead, and note that this means recursive shapes cannot be expressed — and an array-valued `type` on a node that also has subschemas under it, so give such a node a single `type`. An array-valued `type` is fine on a node with no subschemas, so `{"type": ["string", "null"]}` is the way to say a field is nullable. Constructs Zod cannot represent, such as if/then/else and not, are also rejected before any model call. |
 | `schemaName` | string, matching `^[a-zA-Z0-9_-]+$` | no | `extraction` | Name for the schema in the API request. Letters, digits, underscores and hyphens only. |
 | `system` | string | no | none | System prompt setting extraction rules. |
-| `model` | `mistral-small-latest` \| `mistral-medium-latest` \| `mistral-large-latest` | no | server-configured model (`MISTRAL_DEFAULT_MODEL`) | Model to use. Defaults to the server-configured model. |
+| `model` | `mistral-small-latest` \| `mistral-medium-latest` \| `mistral-large-latest` \| `mistral-large-4-0` (Le Chonk) | no | server-configured model (`MISTRAL_DEFAULT_MODEL`) | Model to use. Defaults to the server-configured model. |
 | `temperature` | number, 0–2 | no | Mistral's own default | Sampling temperature. Extraction usually wants a low value. |
 | `strict` | boolean | no | `false` | Enable Mistral strict mode. Requires the schema to set `additionalProperties: false` on every object and list every property in `required`; Mistral rejects the request otherwise. Leave false unless the schema meets those conditions. |
 
@@ -246,7 +246,7 @@ not set `additionalProperties: false` does not forbid extras.
 | Variable | Default | Notes |
 |---|---|---|
 | `MISTRAL_API_KEY` | — | **required** |
-| `MISTRAL_DEFAULT_MODEL` | `mistral-medium-latest` | `mistral-small-latest`, `mistral-medium-latest`, or `mistral-large-latest` |
+| `MISTRAL_DEFAULT_MODEL` | `mistral-medium-latest` | `mistral-small-latest`, `mistral-medium-latest`, `mistral-large-latest`, or `mistral-large-4-0` (Le Chonk) |
 | `MISTRAL_TIMEOUT_MS` | `60000` | per-request timeout; also bounds retry backoff (see below) |
 | `MISTRAL_BASE_URL` | unset | self-hosted or proxied endpoints; must be a valid URL |
 | `MCP_TRANSPORT` | `http` | `http` or `stdio`; the `--stdio` CLI flag overrides this |

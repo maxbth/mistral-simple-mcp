@@ -10,7 +10,7 @@ import {z} from 'zod';
  * A closed enum also makes an invalid model id unrepresentable: a call cannot fail on a
  * hallucinated model name, because the tool's input schema rejects it before the handler runs.
  */
-export const MODELS = ['mistral-small-latest', 'mistral-medium-latest', 'mistral-large-latest'] as const;
+export const MODELS = ['mistral-small-latest', 'mistral-medium-latest', 'mistral-large-latest', 'mistral-large-4-0'] as const;
 
 export const DEFAULT_MODEL = 'mistral-medium-latest';
 

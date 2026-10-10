@@ -2,7 +2,7 @@ import {test, expect} from 'bun:test';
 import {MODELS, DEFAULT_MODEL, modelSchema} from './models';
 
 test('exposes exactly the three supported model ids', () => {
-  expect(MODELS).toEqual(['mistral-small-latest', 'mistral-medium-latest', 'mistral-large-latest']);
+  expect(MODELS).toEqual(['mistral-small-latest', 'mistral-medium-latest', 'mistral-large-latest', 'mistral-large-4-0']);
 });
 
 test('defaults to the medium model', () => {
