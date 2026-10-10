@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {defineTool, CALLS_A_PAID_API_ANNOTATION} from './types';
-import {modelSchema} from '../models';
+import {modelSchema, reasoningEffortSchema} from '../models';
 import {SchemaError} from '../errors';
 import {findSchemaDefect} from '../json-schema';
 import {sentence} from '../text';
@@ -26,6 +26,11 @@ const inputSchema = z.object({
   system: z.string().min(1).optional().describe('System prompt setting extraction rules.'),
   model: modelSchema.optional().describe('Model to use. Defaults to the server-configured model.'),
   temperature: z.number().min(0).max(2).optional().describe('Sampling temperature. Extraction usually wants a low value.'),
+  reasoningEffort: reasoningEffortSchema
+    .optional()
+    .describe(
+      'Reasoning effort. "high" includes a full thinking pass (more tokens, may need a larger maxTokens); "none" keeps thinking minimal. Supported by mistral-small, mistral-medium and mistral-large-4-0 only; omit to use the model default.',
+    ),
   strict: z.boolean().default(false).describe(sentence`
       Enable Mistral strict mode. Requires the schema to set \`additionalProperties: false\` on every
       object and list every property in \`required\`; Mistral rejects the request otherwise. Leave
@@ -79,6 +84,7 @@ export default defineTool({
       system: input.system,
       model: input.model,
       temperature: input.temperature,
+      reasoningEffort: input.reasoningEffort,
       responseFormat: {
         type: 'json_schema',
         jsonSchema: {
