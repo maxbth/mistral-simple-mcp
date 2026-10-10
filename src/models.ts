@@ -16,4 +16,14 @@ export const DEFAULT_MODEL = 'mistral-medium-latest';
 
 export const modelSchema = z.enum(MODELS);
 
+/**
+ * `high` returns a full thinking block ahead of the answer and costs more tokens; `none` keeps
+ * thinking minimal and omits the block. Only some models honour it (see the README).
+ */
+export const REASONING_EFFORTS = ['none', 'high'] as const;
+
+export const reasoningEffortSchema = z.enum(REASONING_EFFORTS);
+
+export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
+
 export type Model = z.infer<typeof modelSchema>;

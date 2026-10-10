@@ -119,6 +119,7 @@ match a specific JSON shape, use `mistral_extract` instead.
 | `prompt` | string | yes | — | The instruction and any input text it operates on. |
 | `system` | string | no | none | System prompt setting the role, tone or output rules. |
 | `model` | `mistral-small-latest` \| `mistral-medium-latest` \| `mistral-large-latest` \| `mistral-large-4-0` (Le Chonk) | no | server-configured model (`MISTRAL_DEFAULT_MODEL`) | Model to use. Defaults to the server-configured model. |
+| `reasoningEffort` | `none` \| `high` | no | model default | Thinking depth. `high` returns a full thinking pass first (more tokens — raise `maxTokens`); `none` keeps thinking minimal. Honoured by `mistral-small`, `mistral-medium` and `mistral-large-4-0`; omit for the model default. |
 | `temperature` | number, 0–2 | no | Mistral's own default | Sampling temperature. Lower is more deterministic. Mistral recommends 0.0-0.7. |
 | `maxTokens` | integer > 0 | no | Mistral's own default | Maximum tokens to generate. |
 
@@ -161,6 +162,7 @@ properties are returned absent, not null.
 | `schemaName` | string, matching `^[a-zA-Z0-9_-]+$` | no | `extraction` | Name for the schema in the API request. Letters, digits, underscores and hyphens only. |
 | `system` | string | no | none | System prompt setting extraction rules. |
 | `model` | `mistral-small-latest` \| `mistral-medium-latest` \| `mistral-large-latest` \| `mistral-large-4-0` (Le Chonk) | no | server-configured model (`MISTRAL_DEFAULT_MODEL`) | Model to use. Defaults to the server-configured model. |
+| `reasoningEffort` | `none` \| `high` | no | model default | Thinking depth. `high` returns a full thinking pass first (more tokens — raise `maxTokens`); `none` keeps thinking minimal. Honoured by `mistral-small`, `mistral-medium` and `mistral-large-4-0`; omit for the model default. |
 | `temperature` | number, 0–2 | no | Mistral's own default | Sampling temperature. Extraction usually wants a low value. |
 | `strict` | boolean | no | `false` | Enable Mistral strict mode. Requires the schema to set `additionalProperties: false` on every object and list every property in `required`; Mistral rejects the request otherwise. Leave false unless the schema meets those conditions. |
 

@@ -6,7 +6,7 @@ import type {ResponseFormat} from '@mistralai/mistralai/models/components';
 import {MistralError} from './errors';
 import {textFromContent} from './content';
 import type {MistralConfig} from './config';
-import type {Model} from './models';
+import type {Model, ReasoningEffort} from './models';
 import {sentence} from './text';
 
 /**
@@ -74,6 +74,7 @@ export interface CompleteRequest {
   model?: Model;
   temperature?: number;
   maxTokens?: number;
+  reasoningEffort?: ReasoningEffort;
   responseFormat?: ResponseFormat;
 }
 
@@ -165,6 +166,7 @@ export class MistralClient {
         // valid and falsy, and a truthy test would silently drop it.
         ...(request.temperature === undefined ? {} : {temperature: request.temperature}),
         ...(request.maxTokens === undefined ? {} : {maxTokens: request.maxTokens}),
+        ...(request.reasoningEffort === undefined ? {} : {reasoningEffort: request.reasoningEffort}),
         ...(request.responseFormat === undefined ? {} : {responseFormat: request.responseFormat}),
       });
     } catch (error) {

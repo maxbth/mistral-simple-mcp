@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {defineTool, CALLS_A_PAID_API_ANNOTATION} from './types';
-import {modelSchema} from '../models';
+import {modelSchema, reasoningEffortSchema} from '../models';
 import {sentence} from '../text';
 
 const inputSchema = z.object({
@@ -13,6 +13,11 @@ const inputSchema = z.object({
     .max(2)
     .optional()
     .describe('Sampling temperature. Lower is more deterministic. Mistral recommends 0.0-0.7.'),
+  reasoningEffort: reasoningEffortSchema
+    .optional()
+    .describe(
+      'Reasoning effort. "high" includes a full thinking pass (more tokens, may need a larger maxTokens); "none" keeps thinking minimal. Supported by mistral-small, mistral-medium and mistral-large-4-0 only; omit to use the model default.',
+    ),
   maxTokens: z.number().int().positive().optional().describe('Maximum tokens to generate.'),
 });
 
@@ -36,6 +41,7 @@ export default defineTool({
       model: input.model,
       temperature: input.temperature,
       maxTokens: input.maxTokens,
+      reasoningEffort: input.reasoningEffort,
     });
 
     return {

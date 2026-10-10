@@ -195,6 +195,7 @@ test('omits optional sampling fields entirely when unset', async () => {
   await client.complete({prompt: 'p'});
   expect('temperature' in seen).toBe(false);
   expect('maxTokens' in seen).toBe(false);
+  expect('reasoningEffort' in seen).toBe(false);
   expect('responseFormat' in seen).toBe(false);
 });
 
@@ -222,6 +223,20 @@ test('passes temperature, maxTokens and responseFormat through when set', async 
   expect(seen.temperature).toBe(0.2);
   expect(seen.maxTokens).toBe(100);
   expect(seen.responseFormat).toEqual(responseFormat);
+});
+
+test('passes reasoningEffort through when set', async () => {
+  let seen!: SeenRequest;
+  const client = clientWith(async (request) => {
+    seen = request as SeenRequest;
+    return okResponse('ok');
+  });
+
+  await client.complete({
+    prompt: 'p',
+    reasoningEffort: 'none',
+  });
+  expect(seen.reasoningEffort).toBe('none');
 });
 
 test('errors when the response carries no choices', async () => {
