@@ -1,6 +1,6 @@
 {
   "name": "mistral-simple-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server for Mistral text completion and JSON-Schema structured output.",
   "license": "MIT",
   "author": "Maxime Bertheau",

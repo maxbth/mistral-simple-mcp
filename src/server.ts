@@ -4,7 +4,7 @@ import {TOOLS} from './tools/index';
 import type {ToolDeps} from './tools/types';
 
 const NAME = 'mistral-simple-mcp';
-const VERSION = '0.1.0';
+const VERSION = '0.1.1';
 
 /**
  * Builds a fully registered MCP server.
